@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ExternalLink, Play, Check, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, Play, Check, Clock, BookmarkPlus, BookmarkMinus, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,18 +7,81 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { DSACategory, DSAProblem } from "@/data/dsaData";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { NotesDialog } from "./NotesDialog";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useToast } from "@/hooks/use-toast";
 
 interface CategoryCardProps {
   category: DSACategory;
   onProblemToggle: (categoryName: string, problemId: number) => void;
+  revisionMap: Record<string, boolean>;
+  notesMap: Record<string, string>;
 }
 
-export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) => {
+export const CategoryCard = ({ category, onProblemToggle, revisionMap, notesMap }: CategoryCardProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [notesDialog, setNotesDialog] = useState<{
+    isOpen: boolean;
+    problemKey: string;
+    problemTitle: string;
+    initialNotes: string;
+  }>({
+    isOpen: false,
+    problemKey: '',
+    problemTitle: '',
+    initialNotes: '',
+  });
+  
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const toggleRevision = useMutation(api.progress.toggleRevision);
   
   const completedCount = category.problems.filter(p => p.completed).length;
   const totalCount = category.problems.length;
   const completionPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  const handleRevisionToggle = async (categoryName: string, problemId: number) => {
+    if (!user) return;
+    
+    const problemKey = `${categoryName}-${problemId}`;
+    const currentlyMarked = revisionMap[problemKey] || false;
+    
+    try {
+      await toggleRevision({
+        userId: user._id,
+        problemKey,
+        markedForRevision: !currentlyMarked,
+      });
+      
+      toast({
+        title: !currentlyMarked ? "Marked for Revision! 📚" : "Removed from Revision",
+        description: !currentlyMarked 
+          ? "Problem added to your revision list"
+          : "Problem removed from your revision list",
+      });
+    } catch (error) {
+      console.error('Error toggling revision:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update revision status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNotesClick = (categoryName: string, problemId: number, problemTitle: string) => {
+    const problemKey = `${categoryName}-${problemId}`;
+    const currentNotes = notesMap[problemKey] || '';
+    
+    setNotesDialog({
+      isOpen: true,
+      problemKey,
+      problemTitle,
+      initialNotes: currentNotes,
+    });
+  };
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty.toLowerCase()) {
@@ -30,6 +93,7 @@ export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) =
   };
 
   const ProblemRow = ({ problem }: { problem: DSAProblem }) => (
+    <>
     <div className="group flex items-center space-x-4 p-4 rounded-lg border border-border/50 bg-card/30 hover:bg-card/50 transition-all duration-200 animate-fade-in">
       <Checkbox
         checked={problem.completed}
@@ -37,6 +101,7 @@ export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) =
         className="data-[state=checked]:bg-success data-[state=checked]:border-success"
       />
       
+      {/* Problem Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center space-x-3 mb-2">
           <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
@@ -45,6 +110,14 @@ export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) =
           <Badge variant="outline" className={getDifficultyColor(problem.difficulty)}>
             {problem.difficulty}
           </Badge>
+          {revisionMap[`${category.name}-${problem.id}`] && (
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+              Revision
+            </Badge>
+          )}
+          {notesMap[`${category.name}-${problem.id}`] && (
+            <FileText className="w-4 h-4 text-primary" />
+          )}
         </div>
         
         {problem.companies && (
@@ -61,6 +134,34 @@ export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) =
       </div>
       
       <div className="flex items-center space-x-2">
+        {/* Notes Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleNotesClick(category.name, problem.id, problem.question)}
+          className="hover:bg-info/10 hover:text-info"
+          title="Add/Edit Notes"
+        >
+          <FileText className="w-4 h-4" />
+        </Button>
+        
+        {/* Revision Toggle Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleRevisionToggle(category.name, problem.id)}
+          className={`hover:bg-primary/10 hover:text-primary ${
+            revisionMap[`${category.name}-${problem.id}`] ? 'text-primary bg-primary/10' : ''
+          }`}
+          title={revisionMap[`${category.name}-${problem.id}`] ? "Remove from Revision" : "Mark for Revision"}
+        >
+          {revisionMap[`${category.name}-${problem.id}`] ? (
+            <BookmarkMinus className="w-4 h-4" />
+          ) : (
+            <BookmarkPlus className="w-4 h-4" />
+          )}
+        </Button>
+        
         {problem.solutionLink && (
           <Button
             variant="ghost"
@@ -84,6 +185,16 @@ export const CategoryCard = ({ category, onProblemToggle }: CategoryCardProps) =
         </Button>
       </div>
     </div>
+    
+    {/* Notes Dialog */}
+    <NotesDialog
+      isOpen={notesDialog.isOpen}
+      onClose={() => setNotesDialog(prev => ({ ...prev, isOpen: false }))}
+      problemKey={notesDialog.problemKey}
+      problemTitle={notesDialog.problemTitle}
+      initialNotes={notesDialog.initialNotes}
+    />
+    </>
   );
 
   return (
