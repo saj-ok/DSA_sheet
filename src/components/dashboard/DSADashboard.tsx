@@ -4,12 +4,13 @@ import { api } from "../../../convex/_generated/api";
 import { DashboardHeader } from "./DashboardHeader";
 import { CategoryCard } from "./CategoryCard";
 import { RevisionView } from "./RevisionView";
+import { AnalyticsPanel } from "./AnalyticsPanel";
 import { dsaData } from "@/data/dsaData";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BookOpen, LogOut } from "lucide-react";
+import { BookOpen, LogOut, BarChart3 } from "lucide-react";
 
 export const DSADashboard = () => {
   const [categories, setCategories] = useState(dsaData);
@@ -132,7 +133,10 @@ export const DSADashboard = () => {
           </TabsList>
 
           <TabsContent value="problems" className="space-y-6">
-            <div className="space-y-6">
+            {/* CHANGED: Restored analytics panel in Problems tab with grid layout */}
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+              {/* Main Problems Section */}
+              <div className="xl:col-span-3 space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold text-foreground">Problem Categories</h2>
                   <div className="text-sm text-muted-foreground">
@@ -155,6 +159,14 @@ export const DSADashboard = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+              
+              {/* Analytics Sidebar */}
+              <div className="xl:col-span-1">
+                <div className="sticky top-6">
+                  <AnalyticsPanel categories={categories} />
+                </div>
+              </div>
             </div>
           </TabsContent>
 
